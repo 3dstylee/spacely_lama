@@ -41,7 +41,8 @@ def main(predict_config: OmegaConf):
         if sys.platform != 'win32':
             register_debug_signal_handlers()  # kill -10 <pid> will result in traceback dumped into log
 
-        device = torch.device("cpu")
+        # device = torch.device("cpu")
+        device = torch.device(predict_config.device)
 
         train_config_path = os.path.join(predict_config.model.path, 'config.yaml')
         with open(train_config_path, 'r') as f:
