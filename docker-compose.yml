@@ -1,0 +1,27 @@
+services:
+  lama-inpainting:
+    build:
+      context: .
+      dockerfile: Dockerfile.inference
+    image: lama-inpainting-inference:latest
+    container_name: lama-inpainting-api
+    ports:
+      - "8082:8082"
+    volumes:
+      # Mount big-lama model folder to /opt/ml/model for easy model updates without rebuilding
+      - ./big-lama:/opt/ml/model/big-lama
+    environment:
+      - LAMA_MODEL_PATH=/opt/ml/model/big-lama
+      - LAMA_CHECKPOINT=best.ckpt
+      - LAMA_DEVICE=auto
+      - LAMA_PORT=8082
+      - LAMA_PAD_MODULO=8
+      - LOGGING_LEVEL=info
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+    restart: unless-stopped

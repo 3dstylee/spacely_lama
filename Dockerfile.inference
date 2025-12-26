@@ -1,0 +1,70 @@
+FROM pytorch/pytorch:1.11.0-cuda11.3-cudnn8-runtime
+
+WORKDIR /app
+
+# --- Environment Configuration ---
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV TORCH_HOME=/app
+ENV PYTHONPATH=/app
+
+# --- Install System Dependencies ---
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    libxrender1 \
+    libfontconfig1 \
+    libice6 \
+    wget \
+    curl \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- Install Python Dependencies ---
+# Copy the dependency definition files first to leverage Docker caching.
+# Using requirements-docker.txt which includes all necessary dependencies
+COPY requirements-docker.txt .
+# Use pip<24.1 for compatibility with pytorch-lightning 1.5.10 metadata
+RUN pip install --no-cache-dir "pip<24.1" && \
+    pip install --no-cache-dir -r requirements-docker.txt
+
+# --- Copy Application Code ---
+# Copy main application files
+COPY fastapi_app.py .
+COPY fastapi.sh .
+COPY inference_gpu.py .
+COPY inference_cpu.py .
+
+# Copy the saicinpainting module
+COPY saicinpainting/ ./saicinpainting/
+
+# Copy configs
+COPY configs/ ./configs/
+
+# Copy models directory (including bin/model utilities if needed)
+COPY models/ ./models/
+
+# --- Copy Pre-trained Model ---
+# Create model directory and copy the model
+RUN mkdir -p /opt/ml/model
+COPY big-lama/ /opt/ml/model/big-lama/
+
+# --- Entrypoint ---
+RUN chmod +x /app/*.sh || true
+
+# Default environment variables (can be overridden in docker-compose or at runtime)
+ENV LAMA_MODEL_PATH=/opt/ml/model/big-lama
+ENV LAMA_CHECKPOINT=best.ckpt
+ENV LAMA_DEVICE=auto
+ENV LAMA_PORT=8080
+ENV LAMA_PAD_MODULO=8
+ENV LOGGING_LEVEL=info
+
+EXPOSE 8080
+
+ENTRYPOINT ["/app/fastapi.sh"]

@@ -1,0 +1,35 @@
+# Core dependencies for LaMa inpainting
+pyyaml
+numpy
+pandas
+opencv-python
+Pillow
+
+# Configuration and utilities
+omegaconf==2.1.1
+easydict==1.9.0
+hydra-core==1.1.0
+packaging
+tqdm
+
+# Machine Learning
+pytorch-lightning==1.5.10
+torchmetrics
+kornia==0.5.0
+tabulate
+
+# Image processing
+scikit-image==0.17.2
+albumentations==0.5.2
+
+# Data handling
+webdataset
+
+# FastAPI and server
+fastapi>=0.68.0,<1.0.0
+uvicorn[standard]>=0.15.0
+python-multipart
+
+# Optional but recommended
+scikit-learn==0.24.2
+joblib

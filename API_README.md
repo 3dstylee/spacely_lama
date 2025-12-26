@@ -1,41 +1,23 @@
-# LaMa Inpainting FastAPI
+# LaMa Inpainting Service
 
-A FastAPI web service for LaMa (Large Mask Inpainting) that accepts an input image and mask, and returns the inpainted result.
+FastAPI web service for LaMa (Large Mask Inpainting) with Docker support.
 
-## Overview
+## Quick Start
 
-This implementation provides three ways to use LaMa inpainting:
-
-1. **FastAPI Web Service** (`fastapi_app.py`) - REST API for remote inference
-2. **Local GPU Inference Script** (`inference_gpu.py`) - Direct Python inference with GPU support
-3. **Local CPU Inference Script** (`inference_cpu.py`) - Direct Python inference on CPU only
-
-## Installation
-
-Make sure you have all the required dependencies installed:
+### Option 1: Docker Deployment (Recommended)
 
 ```bash
-pip install fastapi uvicorn python-multipart requests
+# Build and start
+docker-compose up -d
+
+# Check status
+curl http://localhost:8082/ping
+
+# View logs
+docker-compose logs -f
 ```
 
-The LaMa model dependencies should already be installed if you can run the original `bin/predict.py`.
-
-## Model Setup
-
-Download and prepare the LaMa model:
-
-```bash
-# The model should be in the big-lama directory (or set LAMA_MODEL_PATH)
-# Structure should be:
-# big-lama/
-#   ├── config.yaml
-#   └── models/
-#       └── best.ckpt
-```
-
-## Usage
-
-### Option 1: FastAPI Web Service
+### Option 2: Direct Host Deployment
 
 #### Start the Server
 
@@ -76,215 +58,74 @@ Environment variables:
 - `LAMA_PAD_MODULO`: Padding modulo value (default: `8`)
 - `LOGGING_LEVEL`: Log level (default: `info`)
 
-#### API Endpoints
+## API Endpoints
 
-##### `GET /ping`
-Health check endpoint.
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/ping` | GET | Health check |
+| `/status` | GET | Model status and info |
+| `/inpaint` | POST | Perform inpainting |
+| `/force_unload` | POST | Unload model from memory |
 
-```bash
-curl http://localhost:8082/ping
-```
-
-Response:
-```json
-{"status": "healthy"}
-```
-
-##### `GET /status`
-Get model status and information.
-
-```bash
-curl http://localhost:8082/status
-```
-
-Response:
-```json
-{
-  "model_loaded": true,
-  "uptime_seconds": 123.45,
-  "uptime_hours": 0.034,
-  "device": "cuda",
-  "last_used": "2024-01-01T12:00:00",
-  "model_path": "./big-lama",
-  "checkpoint": "best.ckpt"
-}
-```
-
-##### `POST /inpaint`
-Perform inpainting on an image.
-
+**Inpaint Request:**
 ```bash
 curl -X POST http://localhost:8082/inpaint \
-  -F "image=@path/to/image.jpg" \
-  -F "mask=@path/to/mask.png" \
+  -F "image=@image.jpg" \
+  -F "mask=@mask.png" \
   > response.json
 ```
 
-**Request:**
-- `image`: Input image file (multipart/form-data)
-- `mask`: Mask image file (multipart/form-data)
-  - White pixels (255) = areas to inpaint
-  - Black pixels (0) = areas to keep
+**Mask Format:** White pixels (255) = inpaint, Black pixels (0) = keep
 
-**Response:**
-```json
-{
-  "result": "base64_encoded_png_image",
-  "format": "png",
-  "content_type": "image/png",
-  "processing_time": 1.234,
-  "total_time": 1.456,
-  "timing": {
-    "io_read": 0.012,
-    "decode": 0.034,
-    "model_load": 0.001,
-    "inference": 1.234,
-    "encode": 0.175,
-    "total": 1.456
-  },
-  "input_size": {"width": 512, "height": 512},
-  "output_size": {"width": 512, "height": 512}
-}
-```
-
-##### `POST /force_unload`
-Manually unload the model from memory (for debugging).
+### Option 3: CLI Inference (No Server)
 
 ```bash
-curl -X POST http://localhost:8082/force_unload
-```
-
-### Option 2: Local Inference Scripts
-
-Run inpainting directly without starting the API server:
-
-#### GPU Inference (`inference_gpu.py`)
-
-Uses GPU if available, falls back to CPU automatically:
-
-```bash
-# Basic usage
-python inference_gpu.py --input image.jpg --mask mask.png --output result.png
-
-# Short form
+# GPU (auto-detect)
 python inference_gpu.py -i image.jpg -m mask.png -o result.png
 
-# With custom model path
-python inference_gpu.py -i image.jpg -m mask.png -o result.png \
-  --model-path ./big-lama
-
-# With custom padding
-python inference_gpu.py -i image.jpg -m mask.png -o result.png \
-  --pad-modulo 8
-```
-
-#### CPU-Only Inference (`inference_cpu.py`)
-
-Forces CPU mode (useful for testing or when GPU is not needed):
-
-```bash
-# Basic usage
-python inference_cpu.py --input image.jpg --mask mask.png --output result.png
-
-# Short form
+# CPU only
 python inference_cpu.py -i image.jpg -m mask.png -o result.png
 ```
 
-Options:
-- `-i, --input`: Path to input image file (required)
-- `-m, --mask`: Path to mask image file (required)
-- `-o, --output`: Path to output image file (required)
-- `--model-path`: Path to model directory (default: `./big-lama`)
-- `--checkpoint`: Checkpoint filename (default: `best.ckpt`)
-- `--pad-modulo`: Pad to multiple of this value (default: `8`)
+## Docker Configuration
 
-## Python Client Example
+**Environment Variables:**
+- `LAMA_MODEL_PATH`: Model directory (default: `/opt/ml/model/big-lama`)
+- `LAMA_CHECKPOINT`: Checkpoint file (default: `best.ckpt`)
+- `LAMA_DEVICE`: `auto`, `cuda`, or `cpu` (default: `auto`)
+- `LAMA_PORT`: Internal port (default: `8080`)
+- `LOGGING_LEVEL`: Log level (default: `info`)
 
-```python
-import requests
-import base64
-import cv2
-import numpy as np
-
-# API endpoint
-api_url = "http://localhost:8082"
-
-# Load images
-with open("image.jpg", "rb") as f:
-    image_bytes = f.read()
-with open("mask.png", "rb") as f:
-    mask_bytes = f.read()
-
-# Send request
-files = {
-    'image': ('image.jpg', image_bytes, 'image/jpeg'),
-    'mask': ('mask.png', mask_bytes, 'image/png'),
-}
-response = requests.post(f"{api_url}/inpaint", files=files)
-
-# Get result
-if response.status_code == 200:
-    result = response.json()
-
-    # Decode base64 image
-    img_bytes = base64.b64decode(result['result'])
-    img_array = np.frombuffer(img_bytes, np.uint8)
-    img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-
-    # Save result
-    cv2.imwrite("result.png", img)
-
-    print(f"Processing time: {result['processing_time']:.2f}s")
-    print(f"Total time: {result['total_time']:.2f}s")
-    print(f"Timing breakdown: {result['timing']}")
-else:
-    print(f"Error: {response.status_code}")
-    print(response.text)
+**Change GPU:**
+```yaml
+# In docker-compose.yml
+device_ids: ['1']  # Use GPU 1 instead of GPU 0
 ```
 
-## Mask Format
+**CPU-only mode:**
+```yaml
+# In docker-compose.yml
+environment:
+  - LAMA_DEVICE=cpu
+# Remove the deploy section
+```
 
-The mask image should be a grayscale image where:
-- **White pixels (value 255)**: Areas to **inpaint** (fill in)
-- **Black pixels (value 0)**: Areas to **keep** (preserve)
+## Dependencies
 
-The mask should have the same dimensions as the input image.
-
-## Performance Tips
-
-1. **GPU Usage**: The model will automatically use GPU if available (CUDA)
-2. **Memory**: The model stays loaded in memory for faster subsequent requests
-3. **Padding**: Images are automatically padded to multiples of 8 (default) for model compatibility
-4. **Batch Size**: Currently processes one image at a time
-
-## Comparison with Original `bin/predict.py`
-
-| Feature | `bin/predict.py` | FastAPI (`fastapi_app.py`) | GPU (`inference_gpu.py`) | CPU (`inference_cpu.py`) |
-|---------|------------------|----------------------------|--------------------------|--------------------------|
-| Input | Folder only | Single image + mask | Single image + mask | Single image + mask |
-| Interface | CLI | REST API | CLI | CLI |
-| Device | CPU | Auto/GPU/CPU | Auto (GPU preferred) | CPU only |
-| Use case | Batch processing | Web service | Quick local inference | CPU-only inference |
-| Remote access | No | Yes | No | No |
-| Persistent model | No | Yes | No | No |
+**Included in `requirements-docker.txt`:**
+- PyTorch 1.11.0 + CUDA 11.3 (from base image)
+- opencv-python, numpy, Pillow
+- fastapi, uvicorn, python-multipart
+- omegaconf, hydra-core
+- pytorch-lightning, kornia
+- scikit-image, albumentations
 
 ## Troubleshooting
 
-### Model not found
-```
-FileNotFoundError: Config not found: ./big-lama/config.yaml
-```
-**Solution**: Set the correct model path using `LAMA_MODEL_PATH` environment variable or `--model-path` argument.
+**Port in use:** Change `8082:8080` to `8083:8080` in docker-compose.yml
 
-### CUDA out of memory
-**Solution**: The model will try to recover automatically. If it persists, use a smaller image or call `/force_unload` to free memory.
+**GPU not found:** Install nvidia-docker2 and restart Docker
 
-### Image and mask dimensions don't match
-```
-HTTPException: Image and mask dimensions must match
-```
-**Solution**: Ensure both images have the same width and height.
+**Model not found:** Ensure `./big-lama/config.yaml` and `./big-lama/models/best.ckpt` exist
 
-## License
-
-Same as the original LaMa project.
+**View logs:** `docker-compose logs -f lama-inpainting`
